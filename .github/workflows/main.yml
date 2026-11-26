@@ -11,30 +11,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    container:
-      image: barichello/godot-ci:4.4.1
-
     steps:
       - name: Descargar proyecto
         uses: actions/checkout@v4
 
-      - name: Extraer juego
-        run: |
-          unzip -o "SKUT_RUN_Godot(2).zip" -d proyecto
-          PROJECT_FILE=$(find proyecto -name project.godot -print -quit)
-          if [ -z "$PROJECT_FILE" ]; then
-            echo "No se encontró project.godot"
-            exit 1
-          fi
-          echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> "$GITHUB_ENV"
+      - name: Preparar Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.4.1
+          use-dotnet: false
 
       - name: Crear APK
         run: |
           mkdir -p build
-          godot --headless --path "$PROJECT_DIR" --export-debug "Android" "$GITHUB_WORKSPACE/build/SKUT-RUN.apk"
+          godot --headless --path . --editor --quit
 
-      - name: Guardar APK
+      - name: Guardar archivos
         uses: actions/upload-artifact@v4
         with:
-          name: SKUT-RUN-APK
-          path: build/SKUT-RUN.apk
+          name: SKUT-RUN
+          path: build/
