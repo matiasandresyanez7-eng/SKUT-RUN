@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>SKUT RUN — Santiago</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:#10131b;color:#fff;font-family:system-ui,Arial;overflow:hidden}
+#wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px}
+header{width:min(96vw,520px);display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.logo{font-weight:1000;letter-spacing:3px;font-size:26px;color:#ff424d;text-shadow:2px 2px #111}
+.stats{font-weight:800;font-size:14px}canvas{width:min(96vw,520px);height:min(76vh,780px);border:3px solid #313746;border-radius:18px;background:#20283a;touch-action:none;box-shadow:0 12px 40px #0009}
+#help{width:min(96vw,520px);text-align:center;color:#cbd2df;font-size:12px;margin-top:8px}
+#overlay{position:fixed;inset:0;background:#090c12d9;display:flex;align-items:center;justify-content:center;padding:22px}
+.panel{width:min(90vw,390px);background:#1b2231;border:1px solid #414b60;border-radius:20px;padding:24px;text-align:center;box-shadow:0 20px 60px #0009}
+.panel h1{font-size:38px;margin:0;color:#ff424d;letter-spacing:4px}.panel p{line-height:1.45;color:#d8deea}
+button{border:0;border-radius:999px;background:#ff424d;color:white;font-weight:900;font-size:17px;padding:13px 28px;margin-top:8px}
+.small{font-size:12px;color:#aeb8ca}
+</style></head>
+<body><div id="wrap">
+<header><div class="logo">SKUT RUN</div><div class="stats">🪙 <span id="coins">0</span>　⭐ <span id="score">0</span></div></header>
+<canvas id="game" width="480" height="760" aria-label="Juego SKUT RUN"></canvas>
+<div id="help">Toca para saltar · Desliza hacia abajo para agacharte · Recoge monedas</div>
+</div>
+<div id="overlay"><div class="panel"><h1>SKUT RUN</h1><p><b>Corre por Santiago.</b><br>Esquiva conos y barreras, salta obstáculos y junta monedas para comprar ropa y zapatillas.</p><p class="small">Prototipo inicial · Escenario inspirado en las calles de Santiago de Chile</p><button id="start">JUGAR</button></div></div>
+<script>
+const c=document.getElementById('game'),ctx=c.getContext('2d'),overlay=document.getElementById('overlay');
+let running=false,frame=0,score=0,coins=0,speed=5,obstacles=[],loot=[],player={x:240,y:625,jump:0,slide:0,vy:0};
+const coinEl=document.getElementById('coins'),scoreEl=document.getElementById('score');
+function rounded(x,y,w,h,r,col){ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function background(){
+ ctx.fillStyle='#a8c9d4';ctx.fillRect(0,0,480,760);
+ // cerros y skyline
+ ctx.fillStyle='#647b79';ctx.beginPath();ctx.moveTo(0,230);ctx.lineTo(65,125);ctx.lineTo(125,205);ctx.lineTo(210,105);ctx.lineTo(290,215);ctx.lineTo(375,135);ctx.lineTo(480,220);ctx.fill();
+ ctx.fillStyle='#e8d4b1';for(let i=0;i<9;i++){let x=i*57-10,h=90+(i*37%90);ctx.fillRect(x,230-h,43,h)}
+ ctx.fillStyle='#d8d0c0';ctx.fillRect(0,225,480,70);
+ // edificios
+ for(let i=0;i<8;i++){let x=i*68-20;ctx.fillStyle=['#d1b59b','#b6c1c5','#d8c7a6'][i%3];ctx.fillRect(x,160+(i%3)*20,48,100);ctx.fillStyle='#536575';for(let j=0;j<3;j++)ctx.fillRect(x+8+j*12,175+(i%3)*20,6,12)}
+ // street
+ ctx.fillStyle='#353943';ctx.beginPath();ctx.moveTo(110,280);ctx.lineTo(370,280);ctx.lineTo(480,760);ctx.lineTo(0,760);ctx.fill();
+ ctx.fillStyle='#f4e7bf';ctx.fillRect(0,275,480,9);
+ // lane markings
+ ctx.strokeStyle='#d6d3c8';ctx.lineWidth=5;ctx.setLineDash([35,32]);ctx.beginPath();ctx.moveTo(240,300);ctx.lineTo(240,760);ctx.stroke();ctx.setLineDash([]);
+ // sidewalk and graffiti
+ ctx.fillStyle='#8b8580';ctx.fillRect(0,270,104,490);ctx.fillRect(376,270,104,490);
+ ctx.fillStyle='#ff424d';ctx.font='bold 18px sans-serif';ctx.fillText('SKUT',12,340);ctx.fillStyle='#303846';ctx.fillText('SANTIAGO',383,370);
+}
+function drawPlayer(){
+ let y=player.y-player.jump;
+ if(player.slide>0){rounded(player.x-32,y-22,64,38,16,'#20232b');rounded(player.x-25,y-18,40,14,8,'#ff424d');return}
+ // shadow
+ ctx.fillStyle='#1118';ctx.beginPath();ctx.ellipse(player.x,player.y+4,28,9,0,0,7);ctx.fill();
+ // legs / shoes
+ ctx.strokeStyle='#20232b';ctx.lineWidth=13;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(player.x-9,y-34);ctx.lineTo(player.x-20,y-5);ctx.moveTo(player.x+9,y-34);ctx.lineTo(player.x+20,y-7);ctx.stroke();
+ rounded(player.x-32,y-8,28,12,5,'#f2f2f2');rounded(player.x+9,y-10,29,12,5,'#f2f2f2');
+ // hoodie body and head
+ rounded(player.x-24,y-91,48,61,12,'#20232b');rounded(player.x-24,y-91,48,13,8,'#ff424d');
+ ctx.fillStyle='#d99162';ctx.beginPath();ctx.arc(player.x,y-111,19,0,7);ctx.fill();
+ ctx.fillStyle='#573b2d';ctx.beginPath();ctx.arc(player.x,y-120,20,Math.PI,Math.PI*2);ctx.fill();ctx.fillRect(player.x-18,y-122,36,9);
+ ctx.strokeStyle='#d99162';ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(player.x-20,y-80);ctx.lineTo(player.x-34,y-52);ctx.moveTo(player.x+20,y-80);ctx.lineTo(player.x+34,y-54);ctx.stroke();
+ ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.fillText('S',player.x-4,y-54);
+}
+function drawObstacle(o){let y=o.y;if(o.type==='cone'){ctx.fillStyle='#ff7b28';ctx.beginPath();ctx.moveTo(o.x,y-38);ctx.lineTo(o.x-19,y+5);ctx.lineTo(o.x+19,y+5);ctx.fill();ctx.fillStyle='#fff';ctx.fillRect(o.x-12,y-10,24,6)}else{rounded(o.x-28,y-20,56,27,5,'#f3c23b');ctx.fillStyle='#252a34';ctx.fillRect(o.x-22,y-14,44,5)}}
+function drawCoin(o){ctx.fillStyle='#ffcf35';ctx.beginPath();ctx.arc(o.x,o.y,11,0,7);ctx.fill();ctx.strokeStyle='#fff1a8';ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='#9b6810';ctx.font='bold 13px sans-serif';ctx.fillText('$',o.x-4,o.y+5)}
+function reset(){frame=0;score=0;coins=0;speed=5;obstacles=[];loot=[];player.jump=0;player.vy=0;player.slide=0;coinEl.textContent=0;scoreEl.textContent=0}
+function end(){running=false;overlay.style.display='flex';overlay.querySelector('h1').textContent='¡BUEN INTENTO!';overlay.querySelector('p').innerHTML=`Puntaje: <b>${score}</b><br>Monedas recogidas: <b>${coins}</b><br>¡Vuelve a correr por Santiago!`;document.getElementById('start').textContent='VOLVER A JUGAR'}
+function loop(){
+ if(!running)return;frame++;score=Math.floor(frame/5);speed=5+Math.min(5,frame/900);
+ if(frame%72===0)obstacles.push({x:[160,320][Math.floor(Math.random()*2)],y:-30,type:Math.random()>.5?'cone':'bar'});
+ if(frame%48===0)loot.push({x:[160,240,320][Math.floor(Math.random()*3)],y:-20});
+ obstacles.forEach(o=>o.y+=speed);loot.forEach(o=>o.y+=speed);
+ obstacles=obstacles.filter(o=>o.y<800);loot=loot.filter(o=>o.y<800);
+ for(let i=obstacles.length-1;i>=0;i--){let o=obstacles[i];if(Math.abs(o.y-(player.y-12))<27&&Math.abs(o.x-player.x)<42){if(player.jump<25&&player.slide<=0){end();return}}}
+ for(let i=loot.length-1;i>=0;i--){let o=loot[i];if(Math.abs(o.y-(player.y-50))<30&&Math.abs(o.x-player.x)<38){coins++;loot.splice(i,1);coinEl.textContent=coins}}
+ if(player.jump>0){player.jump+=player.vy;player.vy-=.8;if(player.jump<=0){player.jump=0;player.vy=0}}
+ if(player.slide>0)player.slide--;
+ background();loot.forEach(drawCoin);obstacles.forEach(drawObstacle);drawPlayer();
+ scoreEl.textContent=score;requestAnimationFrame(loop)
+}
+function jump(){if(!running)return;if(player.jump===0&&player.slide===0){player.vy=13;player.jump=1}}
+function slide(){if(running&&player.jump===0)player.slide=38}
+let startY=0;
+c.addEventListener('pointerdown',e=>{startY=e.clientY});
+c.addEventListener('pointerup',e=>{let dy=e.clientY-startY;if(dy>25)slide();else jump()});
+document.getElementById('start').onclick=()=>{overlay.style.display='none';overlay.querySelector('h1').textContent='SKUT RUN';document.getElementById('start').textContent='JUGAR';reset();running=true;loop()};
+</script></body></html>
